@@ -3,57 +3,54 @@ from flask import Flask, render_template, jsonify, request
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 import json
-import datetime
+import datetime 
 import os
-import ssl
+import ssl # Thư viện cần thiết cho TLS
 
 # ----------------------------------------------------
-# 1. CẤU HÌNH MONGODB (NẾU CÓ)
+# 1. Cấu hình CSDL MongoDB (CLOUD/RENDER)
 # ----------------------------------------------------
-MONGO_URI = os.environ.get("MONGO_URI")  # hoặc gán trực tiếp nếu test local
-DB_NAME = "Mobile_Robot"
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/") 
+DB_NAME = "Mobile_Robot" 
 COLLECTION_NAME = "telemetry"
 
-telemetry_collection = None
-
 try:
-    if MONGO_URI:
-        if "srv" in MONGO_URI:
-            mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
-        else:
-            mongo_client = MongoClient(MONGO_URI)
-
-        db = mongo_client[DB_NAME]
-        telemetry_collection = db[COLLECTION_NAME]
-        mongo_client.admin.command('ping')
-        print("✅ MongoDB connected successfully.")
+    if "srv" in MONGO_URI:
+        mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
     else:
-        print("⚠️ MONGO_URI not set. Running without database.")
+        mongo_client = MongoClient(MONGO_URI)
+        
+    db = mongo_client[DB_NAME]
+    telemetry_collection = db[COLLECTION_NAME]
+    
+    mongo_client.admin.command('ping')
+    print("MongoDB connected successfully (CLOUD Optimized).")
 except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    telemetry_collection = None
+    print(f"MongoDB connection failed: {e}")
+    print("WARNING: Application running without database database connection.")
+    telemetry_collection = None 
 
 # ----------------------------------------------------
-# 2. CẤU HÌNH MQTT (HIVEMQ CLOUD)
+# 2. Cấu hình MQTT (Bổ sung User/Pass)
 # ----------------------------------------------------
 MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
+MQTT_CMD_TOPIC = "robot/command/set" 
+MQTT_STATUS_TOPIC = "robot/telemetry/status" 
 
-MQTT_USERNAME = "tuanpro24062004@gmail.com"
-MQTT_PASSWORD = "Tuan@24062004"
+# 🚨 ĐÃ THÊM: Đọc User và Pass từ Biến môi trường
+MQTT_USERNAME = os.environ.get('MQTT_USER', '')
+MQTT_PASSWORD = os.environ.get('MQTT_PASS', '')
 
-MQTT_CMD_TOPIC = "robot/command/set"
-MQTT_STATUS_TOPIC = "robot/telemetry/status"
-
-# ----------------------------------------------------
-# 3. FLASK APP
-# ----------------------------------------------------
 app = Flask(__name__)
-app.config['SECRET_KEY'] = "secret-key-demo"
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key_local') 
 
-# ----------------------------------------------------
-# 4. BIẾN TRẠNG THÁI HIỆN TẠI
-# ----------------------------------------------------
+mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+
+# 🚨 THIẾT LẬP USERNAME VÀ PASSWORD TRƯỚC KHI CONNECT
+if MQTT_USERNAME and MQTT_PASSWORD:
+    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
 current_state = {
     'speed': 0,
     'mode': 'MANUAL',
@@ -61,146 +58,120 @@ current_state = {
 }
 
 # ----------------------------------------------------
-# 5. MQTT CLIENT
-# ----------------------------------------------------
-client_id = f"flask-robot-{int(datetime.datetime.now().timestamp())}"
-mqtt_client = mqtt.Client(client_id=client_id)
-
-mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-
-# ----------------------------------------------------
-# 6. MQTT CALLBACK
+# 3. Xử lý sự kiện MQTT (Ghi CSDL)
 # ----------------------------------------------------
 def on_connect(client, userdata, flags, rc):
-    print("✅ MQTT Connected with code:", rc)
-    client.subscribe(MQTT_STATUS_TOPIC)
-    print("✅ Subscribed:", MQTT_STATUS_TOPIC)
+    """Callback khi kết nối thành công: Đăng ký Topic."""
+    print(f"MQTT Connected with result code {rc}")
+    client.subscribe(MQTT_STATUS_TOPIC) 
 
 def on_message(client, userdata, msg):
+    """Callback khi nhận được dữ liệu trạng thái từ ESP."""
     global current_state
-
     try:
         payload = msg.payload.decode()
-        print("📥 MQTT RECEIVED:", payload)
-
         data = json.loads(payload)
 
         if msg.topic == MQTT_STATUS_TOPIC:
-
+            
             if telemetry_collection is not None:
                 telemetry_record = {
                     "timestamp": datetime.datetime.now(),
-"speed": data.get('speed', current_state['speed']),
-                    "mode": data.get('mode', current_state['mode']),
-                    "direction": data.get('direction', current_state['last_command']),
-                    "raw_data": data
+                    "speed": data.get('speed', current_state['speed']),
+                    "mode": data.get('mode', current_state['mode']),  
+                    "direction": current_state['last_command'],        
+                    "raw_data": data                                   
                 }
                 telemetry_collection.insert_one(telemetry_record)
-                print("✅ MongoDB: Data inserted")
+                print("MongoDB <== Data inserted.")
+            else:
+                print("MongoDB is not connected. Data not saved.")
 
             if 'speed' in data:
                 current_state['speed'] = data['speed']
-
             if 'mode' in data:
                 current_state['mode'] = data['mode']
-
+            
     except Exception as e:
-        print("❌ MQTT MESSAGE ERROR:", e)
-
-mqtt_client.on_connect = on_connect
-mqtt_client.on_message = on_message
+        print(f"Error processing message or inserting to MongoDB: {e}")
 
 # ----------------------------------------------------
-# 7. ROUTE WEB
+# 4. Định tuyến và MQTT Publishing (Gửi lệnh từ Web)
 # ----------------------------------------------------
 @app.route('/')
 def index():
+    """Trang chủ hiển thị giao diện điều khiển."""
     return render_template('index.html')
 
-# ----------------------------------------------------
-# 8. NHẬN LỆNH ĐIỀU KHIỂN TỪ WEB → GỬI MQTT
-# ----------------------------------------------------
 @app.route('/command', methods=['POST'])
 def receive_command():
-    global current_state
-
+    """Nhận lệnh từ Web Client và PUBLISH qua MQTT."""
     data = request.get_json()
     command = data.get('command', 'S')
-
+    
     mqtt_payload = json.dumps({
         'cmd': command,
-        'spd': current_state['speed']
+        'spd': current_state['speed'],
     })
-
-    mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload)
+    
+    mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
+    
     current_state['last_command'] = command
-
-    print(f"🚀 Flask ==> MQTT PUBLISHED: {mqtt_payload}")
-
+    print(f"Flask ==> PUBLISHED: {command} to {MQTT_CMD_TOPIC}")
+    
     return jsonify({
-        'status': 'OK',
-        'command': command,
-        'speed': current_state['speed'],
-        'mode': current_state['mode']
+        'status': 'OK', 
+        'message': f'Published {command}',
+        'mode': current_state['mode'] 
     }), 200
 
-# ----------------------------------------------------
-# 9. SET SPEED
-# ----------------------------------------------------
 @app.route('/speed/<int:value>', methods=['POST'])
 def set_speed(value):
+    """Cập nhật tốc độ và PUBLISH lệnh DỪNG với tốc độ mới."""
     global current_state
-
     if 0 <= value <= 255:
         current_state['speed'] = value
-
+        
         mqtt_payload = json.dumps({
-            'cmd': 'S',
-            'spd': value
+            'cmd': 'S', 
+            'spd': value,
         })
+        mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
+        
+        return jsonify({'status': 'OK', 'speed': value, 'mode': current_state['mode']}), 200
+        
+    return jsonify({'status': 'Error', 'message': 'Invalid speed value'}), 400
 
-        mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload)
-
-        print(f"🚀 Set Speed ==> MQTT: {mqtt_payload}")
-
-        return jsonify({
-            'status': 'OK',
-            'speed': value,
-            'mode': current_state['mode']
-        }), 200
-
-    return jsonify({'status': 'Error', 'message': 'Invalid speed'}), 400
-
-# ----------------------------------------------------
-# 10. MODE AUTO / MANUAL
-# ----------------------------------------------------
 @app.route('/mode', methods=['POST'])
 def toggle_mode():
+    """Chuyển đổi chế độ và PUBLISH lệnh DỪNG nếu chuyển sang AUTO."""
     global current_state
-
     if current_state['mode'] == 'MANUAL':
         current_state['mode'] = 'AUTO'
-
-        mqtt_client.publish(MQTT_CMD_TOPIC, json.dumps({
-            'cmd': 'S',
-            'spd': 0
-        }))
+        mqtt_client.publish(MQTT_CMD_TOPIC, json.dumps({'cmd': 'S', 'spd': 0}))
     else:
         current_state['mode'] = 'MANUAL'
+        
+    mqtt_client.publish('robot/mode/status', current_state['mode'], qos=0)
+    
+    return jsonify({'status': 'OK', 'mode': current_state['mode']}), 200
 
-    print("🔄 Mode changed to:", current_state['mode'])
-
-    return jsonify({
-        'status': 'OK',
-        'mode': current_state['mode']
-    }), 200
-# ----------------------------------------------------
-# 11. KHỞI ĐỘNG SERVER
-# ----------------------------------------------------
+# -----------------
+# 5. Khởi động Server
+# -----------------
 if __name__ == '__main__':
-    print("🚀 Connecting to MQTT Broker...")
+    # THIẾT LẬP KẾT NỐI BẢO MẬT MQTTS (Port 8883)
+    mqtt_client.tls_set(certfile=None, 
+                        keyfile=None, 
+                        cert_reqs=ssl.CERT_REQUIRED, 
+                        tls_version=ssl.PROTOCOL_TLS, 
+                        ciphers=None)
+    
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
+    
+    client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    mqtt_client.loop_start()
-
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    mqtt_client.loop_start() 
+    
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
