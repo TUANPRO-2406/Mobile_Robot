@@ -33,8 +33,7 @@ except Exception as e:
 # ----------------------------------------------------
 # 2. Cấu hình MQTT
 # ----------------------------------------------------
-MQTT_BROKER = "broker.hivemq.com" 
-# 🚨 ĐÃ SỬA: Cổng MQTTS tiêu chuẩn
+MQTT_BROKER = "f9931c4b722e495ebb810389d3224c73.s1.eu.hivemq.cloud" 
 MQTT_PORT = 8883 
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
