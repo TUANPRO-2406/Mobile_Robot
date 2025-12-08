@@ -1,18 +1,20 @@
 import paho.mqtt.client as mqtt
 from flask import Flask, render_template, jsonify, request
 from pymongo import MongoClient
-from pymongo.server_api import ServerApi
+from pymongo.server_api import ServerApi # Thư viện cần thiết cho Atlas tối ưu
 import json
 import datetime 
 import os
+import ssl # Thư viện cần thiết cho TLS
 
-
+# ----------------------------------------------------
+# 1. Cấu hình CSDL MongoDB (CLOUD/RENDER)
+# ----------------------------------------------------
 MONGO_URI = os.environ.get("MONGO_URI") 
-DB_NAME = "Mobile_Robot" # Tên CSDL chính xác của bạn
+DB_NAME = "Mobile_Robot" 
 COLLECTION_NAME = "telemetry"
 
 try:
-    # 🚨 SỬ DỤNG SERVER_API: Chỉ dùng khi kết nối đến Atlas (chứa 'srv' trong URI)
     if "srv" in MONGO_URI:
         mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
     else:
@@ -21,11 +23,9 @@ try:
     db = mongo_client[DB_NAME]
     telemetry_collection = db[COLLECTION_NAME]
     
-    # Gửi lệnh ping để xác nhận kết nối TCP/IP
     mongo_client.admin.command('ping')
     print("MongoDB connected successfully (CLOUD Optimized).")
 except Exception as e:
-    # Nếu kết nối thất bại (do lỗi bad auth, hoặc server localhost không chạy)
     print(f"MongoDB connection failed: {e}")
     print("WARNING: Application running without database connection.")
     telemetry_collection = None 
@@ -33,22 +33,21 @@ except Exception as e:
 # ----------------------------------------------------
 # 2. Cấu hình MQTT
 # ----------------------------------------------------
-MQTT_BROKER = "broker.hivemq.com" # Broker công cộng (sử dụng được cả Local và Cloud)
-MQTT_PORT = 1883
-MQTT_CMD_TOPIC = "robot/command/set" # Topic Flask PUBLISH (ESP SUBSCRIBE)
-MQTT_STATUS_TOPIC = "robot/telemetry/status" # Topic ESP PUBLISH (Flask SUBSCRIBE)
+MQTT_BROKER = "broker.hivemq.com" 
+# 🚨 ĐÃ SỬA: Cổng MQTTS tiêu chuẩn
+MQTT_PORT = 8883 
+MQTT_CMD_TOPIC = "robot/command/set" 
+MQTT_STATUS_TOPIC = "robot/telemetry/status" 
 
 app = Flask(__name__)
-# Đọc SECRET_KEY từ biến môi trường Render
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY') 
 
-# Khởi tạo MQTT Client với API V2 (Loại bỏ cảnh báo DeprecationWarning)
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
 current_state = {
     'speed': 0,
     'mode': 'MANUAL',
-    'last_command': 'S' # Lệnh cuối cùng
+    'last_command': 'S'
 }
 
 # ----------------------------------------------------
@@ -66,7 +65,6 @@ def on_message(client, userdata, msg):
         payload = msg.payload.decode()
         data = json.loads(payload)
 
-        # Ghi dữ liệu vào MongoDB chỉ khi nhận được phản hồi từ ESP
         if msg.topic == MQTT_STATUS_TOPIC:
             
             if telemetry_collection is not None:
@@ -74,7 +72,7 @@ def on_message(client, userdata, msg):
                     "timestamp": datetime.datetime.now(),
                     "speed": data.get('speed', current_state['speed']),
                     "mode": data.get('mode', current_state['mode']),  
-                    "direction": current_state['last_command'], # Lệnh cuối cùng đã được thực thi
+                    "direction": current_state['last_command'], 
                     "raw_data": data                                   
                 }
                 telemetry_collection.insert_one(telemetry_record)
@@ -109,10 +107,8 @@ def receive_command():
         'spd': current_state['speed'],
     })
     
-    # PUBLISH lệnh đến Topic mà ESP đang lắng nghe
     mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
     
-    # Cập nhật trạng thái lệnh cuối cùng (Quan trọng cho việc ghi CSDL)
     current_state['last_command'] = command
     print(f"Flask ==> PUBLISHED: {command} to {MQTT_CMD_TOPIC}")
     
@@ -129,7 +125,6 @@ def set_speed(value):
     if 0 <= value <= 255:
         current_state['speed'] = value
         
-        # PUBLISH lệnh dừng để đảm bảo robot cập nhật tốc độ
         mqtt_payload = json.dumps({
             'cmd': 'S', 
             'spd': value,
@@ -146,7 +141,6 @@ def toggle_mode():
     global current_state
     if current_state['mode'] == 'MANUAL':
         current_state['mode'] = 'AUTO'
-        # Dừng xe khi chuyển sang chế độ Tự động
         mqtt_client.publish(MQTT_CMD_TOPIC, json.dumps({'cmd': 'S', 'spd': 0}))
     else:
         current_state['mode'] = 'MANUAL'
@@ -159,13 +153,14 @@ def toggle_mode():
 # 5. Khởi động Server
 # -----------------
 if __name__ == '__main__':
+    # 🚨 ĐÃ SỬA: Thêm tùy chọn TLS cho kết nối MQTTS
+    mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLS) 
+    
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
     
-    # Kết nối MQTT Broker
     client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
     mqtt_client.loop_start() 
     
-    # Chạy Flask App (Sẽ được thay thế bằng Gunicorn trên Render)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
