@@ -45,7 +45,7 @@ MQTT_PASSWORD = os.environ.get('MQTT_PASS', '')
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key_local') 
 
-mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+mqtt_client = mqtt.Client()
 
 # 🚨 THIẾT LẬP USERNAME VÀ PASSWORD TRƯỚC KHI CONNECT
 if MQTT_USERNAME and MQTT_PASSWORD:
