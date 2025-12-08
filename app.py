@@ -42,7 +42,7 @@ MQTT_STATUS_TOPIC = "robot/telemetry/status"
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY') 
 
-mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+mqtt_client = mqtt.Client()
 
 current_state = {
     'speed': 0,
