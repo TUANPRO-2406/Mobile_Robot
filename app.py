@@ -5,10 +5,10 @@ from pymongo.server_api import ServerApi
 import json
 import datetime 
 import os
-import ssl # Thư viện cần thiết cho TLS
+# import ssl # KHÔNG CẦN THIẾT
 
 # ----------------------------------------------------
-# 1. Cấu hình CSDL MongoDB (CLOUD/RENDER)
+# 1. Cấu hình CSDL MongoDB (Giữ nguyên)
 # ----------------------------------------------------
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/") 
 DB_NAME = "Mobile_Robot" 
@@ -27,18 +27,19 @@ try:
     print("MongoDB connected successfully (CLOUD Optimized).")
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
-    print("WARNING: Application running without database database connection.")
+    print("WARNING: Application running without database connection.")
     telemetry_collection = None 
 
 # ----------------------------------------------------
-# 2. Cấu hình MQTT (Bổ sung User/Pass)
+# 2. Cấu hình MQTT (ĐÃ SỬA SANG CỔNG THƯỜNG)
 # ----------------------------------------------------
-MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud"
-MQTT_PORT = 8883
+MQTT_BROKER = "broker.hivemq.com"
+# 🚨 ĐÃ SỬA: Chuyển về cổng không bảo mật
+MQTT_PORT = 1883 
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
 
-# 🚨 ĐÃ THÊM: Đọc User và Pass từ Biến môi trường
+# Loại bỏ user/pass cho broker công cộng
 MQTT_USERNAME = os.environ.get('MQTT_USER', '')
 MQTT_PASSWORD = os.environ.get('MQTT_PASS', '')
 
@@ -47,9 +48,7 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_ke
 
 mqtt_client = mqtt.Client()
 
-# 🚨 THIẾT LẬP USERNAME VÀ PASSWORD TRƯỚC KHI CONNECT
-if MQTT_USERNAME and MQTT_PASSWORD:
-    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+# KHÔNG CẦN THIẾT LẬP USER/PASS VÌ CỔNG 1883 LÀ CỔNG CÔNG CỘNG
 
 current_state = {
     'speed': 0,
@@ -160,12 +159,7 @@ def toggle_mode():
 # 5. Khởi động Server
 # -----------------
 if __name__ == '__main__':
-    # THIẾT LẬP KẾT NỐI BẢO MẬT MQTTS (Port 8883)
-    mqtt_client.tls_set(certfile=None, 
-                        keyfile=None, 
-                        cert_reqs=ssl.CERT_REQUIRED, 
-                        tls_version=ssl.PROTOCOL_TLS, 
-                        ciphers=None)
+    # 🚨 ĐÃ XÓA: Loại bỏ tls_set vì chúng ta dùng cổng 1883
     
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
