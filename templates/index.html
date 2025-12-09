@@ -1,27 +1,42 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <!-- ĐÃ SỬA: Thêm user-scalable=no, maximum-scale=1.0 để vô hiệu hóa zoom -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>Điều Khiển Mobile Robot - HTTP/REST</title>
     <!-- Nhúng CSS tùy chỉnh -->
-    <link rel="stylesheet" href="/static/css/style.css"> 
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <!-- ĐÃ SỬA: oncontextmenu="return false;" để chặn hộp thoại ngữ cảnh khi nhấn giữ -->
-<body oncontextmenu="return false;"> 
+
+<body oncontextmenu="return false;">
     <div class="container">
         <!-- TIÊU ĐỀ và BẢNG TRẠNG THÁI -->
         <div class="header-area">
-            <h1>Web Điều Khiển Robot</h1>
-            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>Web Điều Khiển Robot</h1>
+                <div>
+                    <a href="/history" style="text-decoration: none; margin-right: 10px;">
+                        <button style="padding: 5px 10px; cursor: pointer;">Lịch Sử</button>
+                    </a>
+                    <a href="/logout" style="text-decoration: none;">
+                        <button
+                            style="padding: 5px 10px; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 4px;">Đăng
+                            xuất</button>
+                    </a>
+                </div>
+            </div>
+
             <div class="status-panel">
                 <div class="status-header">
                     <p>Chế độ: <strong id="current-mode">MANUAL</strong></p>
-                    <p>Tốc độ: <strong id="current-speed-display">0</strong></p>        
+                    <p>Khí gas: <strong id="current-gas-display" style="color: green;">0</strong></p>
+                    <p>Tốc độ: <strong id="current-speed-display">0</strong></p>
                 </div>
                 <p id="message-log"></p>
-                
+
                 <div class="toggle-speed-group">
                     <button id="mode-toggle-btn" class="mode-manual">Chế độ tự động</button>
                     <!-- Thanh trượt tốc độ -->
@@ -38,31 +53,26 @@
             <h2>Bảng Điều Khiển</h2>
             <div class="control-pad" id="manual-controls">
                 <div class="row">
-                    <img src="/static/images/tuan.jpg" 
-                         class="control-img" alt="Tiến"
-                         onmousedown="send_command_post('FORWARD')" ontouchstart="send_command_post('FORWARD')" 
-                         onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                    <img src="/static/images/tuan.jpg" class="control-img" alt="Tiến"
+                        onmousedown="send_command_post('FORWARD')" ontouchstart="send_command_post('FORWARD')"
+                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
                 </div>
                 <div class="row">
-                    <img src="/static/images/thun.jpg" 
-                         class="control-img" alt="Trái"
-                         onmousedown="send_command_post('LEFT')" ontouchstart="send_command_post('LEFT')"
-                         onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
-                    
-                    <img src="/static/images/beu.jpg" 
-                         class="control-img stop-img" alt="Dừng"
-                         onclick="send_command_post('STOP')">
+                    <img src="/static/images/thun.jpg" class="control-img" alt="Trái"
+                        onmousedown="send_command_post('LEFT')" ontouchstart="send_command_post('LEFT')"
+                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
 
-                    <img src="/static/images/hin.jpg" 
-                         class="control-img" alt="Phải"
-                         onmousedown="send_command_post('RIGHT')" ontouchstart="send_command_post('RIGHT')"
-                         onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                    <img src="/static/images/beu.jpg" class="control-img stop-img" alt="Dừng"
+                        onclick="send_command_post('STOP')">
+
+                    <img src="/static/images/hin.jpg" class="control-img" alt="Phải"
+                        onmousedown="send_command_post('RIGHT')" ontouchstart="send_command_post('RIGHT')"
+                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
                 </div>
                 <div class="row">
-                    <img src="/static/images/dieu.jpg" 
-                         class="control-img" alt="Lùi"
-                         onmousedown="send_command_post('BACKWARD')" ontouchstart="send_command_post('BACKWARD')"
-                         onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                    <img src="/static/images/dieu.jpg" class="control-img" alt="Lùi"
+                        onmousedown="send_command_post('BACKWARD')" ontouchstart="send_command_post('BACKWARD')"
+                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
                 </div>
             </div>
         </div>
@@ -84,9 +94,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok) {
                     if (result.mode) {
                         update_status_ui(result.mode);
@@ -115,14 +125,14 @@
             currentSpeedDisplay.textContent = speed;
             post_data(`/speed/${speed}`);
         });
-        
+
         modeToggleBtn.addEventListener('click', () => {
             post_data('/mode');
         });
 
         function update_status_ui(new_mode) {
-             currentModeDisplay.textContent = new_mode;
-             if (new_mode === "MANUAL") {
+            currentModeDisplay.textContent = new_mode;
+            if (new_mode === "MANUAL") {
                 modeToggleBtn.textContent = "Chuyển sang Tự động";
                 modeToggleBtn.className = "mode-manual";
                 manualControls.style.opacity = "1";
@@ -134,12 +144,13 @@
                 manualControls.style.pointerEvents = "none";
             }
         }
-        
+
         document.addEventListener('DOMContentLoaded', () => {
-             sliderValueDisplay.textContent = speedSlider.value;
-             currentSpeedDisplay.textContent = speedSlider.value;
+            sliderValueDisplay.textContent = speedSlider.value;
+            currentSpeedDisplay.textContent = speedSlider.value;
         });
 
     </script>
 </body>
+
 </html>
