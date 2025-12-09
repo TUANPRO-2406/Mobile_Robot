@@ -204,8 +204,8 @@ MQTT_PORT = 8883
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
 
-MQTT_USERNAME = os.environ.get('MQTT_USER', '')
-MQTT_PASSWORD = os.environ.get('MQTT_PASS', '')
+MQTT_USERNAME = os.environ.get('MQTT_USER', 'tuanpro')
+MQTT_PASSWORD = os.environ.get('MQTT_PASS', 'Tuan@24062004')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key_local') 
@@ -271,13 +271,18 @@ def setup_mqtt_worker():
         # BƯỚC 1: Cấu hình Username/Password
         if MQTT_USERNAME and MQTT_PASSWORD:
             mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-        
-        # BƯỚC 2: Cấu hình TLS/SSL
-        mqtt_client.tls_set(certfile=None, 
-                            keyfile=None, 
-                            cert_reqs=ssl.CERT_REQUIRED, 
-                            tls_version=ssl.PROTOCOL_TLS, 
-                            ciphers=None)
+
+        # Log trạng thái cấu hình MQTT (không in mật khẩu)
+        print(f"MQTT config -> broker={MQTT_BROKER} port={MQTT_PORT} user_set={bool(MQTT_USERNAME)}")
+
+        # BƯỚC 2: Cấu hình TLS/SSL sử dụng system CA (an toàn hơn trên Render)
+        try:
+            tls_ctx = ssl.create_default_context()
+            tls_ctx.check_hostname = True
+            mqtt_client.tls_set_context(tls_ctx)
+            print("MQTT TLS: Using system default CA context.")
+        except Exception as e:
+            print(f"WARNING: Could not set MQTT TLS context: {e}")
         
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
@@ -285,8 +290,9 @@ def setup_mqtt_worker():
         client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
         try:
             # 🚨 THỬ KẾT NỐI VÀ BẮT ĐẦU LUỒNG MQTT
+            print(f"Attempting MQTT connect to {MQTT_BROKER}:{MQTT_PORT} ...")
             mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-            mqtt_client.loop_start() 
+            mqtt_client.loop_start()
             app.config['mqtt_connected'] = True
             print("INFO: MQTT Client thread started successfully within Worker.")
         except Exception as e:
@@ -351,6 +357,26 @@ def toggle_mode():
     return jsonify({
         'status': 'OK', 
         'mode': current_state['mode']
+    }), 200
+
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Simple health endpoint: checks MongoDB ping and MQTT connection status."""
+    db_ok = False
+    try:
+        # try to ping the server (use admin DB)
+        mongo_client.admin.command('ping')
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    mqtt_ok = bool(app.config.get('mqtt_connected', False))
+
+    return jsonify({
+        'status': 'OK',
+        'mongo': 'connected' if db_ok else 'disconnected',
+        'mqtt': 'connected' if mqtt_ok else 'disconnected'
     }), 200
 
 if __name__ == '__main__':
