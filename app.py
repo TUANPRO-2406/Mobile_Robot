@@ -204,8 +204,8 @@ MQTT_PORT = 8883
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
 
-MQTT_USERNAME = os.environ.get('MQTT_USER', 'tuanpro')
-MQTT_PASSWORD = os.environ.get('MQTT_PASS', 'Tuan@24062004')
+MQTT_USERNAME = os.environ.get('MQTT_USER', '')
+MQTT_PASSWORD = os.environ.get('MQTT_PASS', '')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key_local') 
