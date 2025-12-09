@@ -7,11 +7,8 @@ import datetime
 import os
 import ssl 
 
-# ----------------------------------------------------
-# 1. Cấu hình CSDL MongoDB (CLOUD/RENDER)
-# ----------------------------------------------------
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/") 
-DB_NAME = "Mobile_Robot_Haha" 
+DB_NAME = "Mobile_Robot" 
 COLLECTION_NAME = "telemetry"
 
 try:
@@ -58,13 +55,13 @@ current_state = {
 # ----------------------------------------------------
 
 # 🚨 ĐÃ SỬA: Chấp nhận 5 tham số để khớp với API V2
-def on_connect(client, userdata, flags, rc, properties):
+def on_connect(client, userdata, flags, rc):
     """Callback khi kết nối thành công: Đăng ký Topic (API V2)."""
     print(f"MQTT Connected successfully with result code {rc}")
     client.subscribe(MQTT_STATUS_TOPIC) 
 
 # 🚨 ĐÃ SỬA: Chấp nhận 4 tham số để khớp với API V2
-def on_message(client, userdata, msg, properties):
+def on_message(client, userdata, msg):
     """Callback khi nhận được dữ liệu trạng thái từ ESP (API V2)."""
     global current_state
     try:
