@@ -21,10 +21,13 @@ const char* mqtt_pass ="Tuan@24062004";
 const char* MQTT_CMD_TOPIC = "robot/command/set"; 
 const char* MQTT_STATUS_TOPIC = "robot/telemetry/status"; 
 
+<<<<<<< HEAD
 // Biến thời gian cho việc gửi dữ liệu định kỳ
 unsigned long lastMsg = 0;
 const long interval = 3000; // 3 giây gửi 1 lần 
 
+=======
+>>>>>>> b91306d14b940347b7ce30a33f2c94898781f811
 // --- Khởi tạo các đối tượng ---
 // Dùng WiFiClientSecure để thiết lập kết nối bảo mật
 WiFiClientSecure espClient; 
@@ -46,14 +49,22 @@ void sendCommandToArduino(String command, int speed) {
 }
 
 // PUBLISH thông tin phản hồi (trạng thái) lên Broker
+<<<<<<< HEAD
 void publishStatus(String command, int speed, int gas) {
+=======
+void publishStatus(String command, int speed) {
+>>>>>>> b91306d14b940347b7ce30a33f2c94898781f811
   if (!client.connected()) return; // Không gửi nếu bị ngắt kết nối
   
   StaticJsonDocument<200> statusDoc;
   statusDoc["direction"] = command; 
   statusDoc["speed"] = speed;
+<<<<<<< HEAD
   statusDoc["mode"] = "MANUAL"; // Lưu ý: Cần biến toàn cục nếu muốn theo dõi đúng mode
   statusDoc["gas"] = gas;
+=======
+  statusDoc["mode"] = "MANUAL"; 
+>>>>>>> b91306d14b940347b7ce30a33f2c94898781f811
 
   char payload[200];
   serializeJson(statusDoc, payload);
@@ -91,9 +102,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   sendCommandToArduino(cmd, spd);
 
   // 2. Gửi phản hồi lên Broker (PUBLISH)
+<<<<<<< HEAD
   // Đọc gas ngay lúc gửi command để phản hồi luôn
   int currentGas = analogRead(A0);
   publishStatus(cmd, spd, currentGas);
+=======
+  publishStatus(cmd, spd);
+>>>>>>> b91306d14b940347b7ce30a33f2c94898781f811
 }
 
 // --- Hàm kết nối lại với MQTT Broker ---
@@ -155,6 +170,7 @@ void loop() {
       reconnect(); // Kết nối lại nếu bị ngắt
     }
     client.loop(); // Duy trì kết nối và xử lý thông điệp đến
+<<<<<<< HEAD
 
     // --- ĐOẠN CODE MỚI: Gửi dữ liệu định kỳ (Gas, Speed, Mode) ---
     unsigned long now = millis();
@@ -179,6 +195,8 @@ void loop() {
       publishStatus("Hb", 0, gasValue); // Hb = Heartbeat
     }
 
+=======
+>>>>>>> b91306d14b940347b7ce30a33f2c94898781f811
   } else {
     // Thử kết nối lại Wi-Fi mỗi 10 giây nếu bị mất kết nối
     if (millis() % 10000 == 0) {
