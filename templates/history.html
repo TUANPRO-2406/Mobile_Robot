@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lịch Sử Hoạt Động - Robot Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 15px;
+        }
+
+        h2 {
+            margin: 0;
+            color: #333;
+        }
+
+        .btn-back {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .btn-back:hover {
+            background-color: #5a6268;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+            font-style: italic;
+        }
+
+        .mode-auto {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .mode-manual {
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        .dir-icon {
+            width: 20px;
+            text-align: center;
+            display: inline-block;
+        }
+
+        .gas-warning {
+            background-color: #ffe6e6;
+            /* Đỏ nhạt background */
+        }
+
+        .gas-danger {
+            color: #dc3545;
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h2><i class="fas fa-history"></i> Lịch Sử Hoạt Động</h2>
+            <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Quay lại</a>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Thời gian</th>
+                    <th>Chế độ</th>
+                    <th>Khí Gas</th> <!-- Cột Mới -->
+                    <th>Tốc độ</th>
+                    <th>Hướng / Lệnh</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if history_data %}
+                {% for row in history_data %}
+                <tr class="{{ 'gas-warning' if row.gas > 400 else '' }}">
+                    <td>{{ row.timestamp }}</td>
+                    <td>
+                        <span class="{{ 'mode-auto' if row.mode == 'AUTO' else 'mode-manual' }}">
+                            {{ row.mode }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if row.gas > 400 %}
+                        <span class="gas-danger"><i class="fas fa-radiation-alt"></i> {{ row.gas }} (Cảnh báo)</span>
+                        {% else %}
+                        <span style="color: green;">{{ row.gas }} (An toàn)</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.speed }}</td>
+                    <td>
+                        {% if row.direction == 'F' %}<i class="fas fa-arrow-up dir-icon"></i> Tiến
+                        {% elif row.direction == 'B' %}<i class="fas fa-arrow-down dir-icon"></i> Lùi
+                        {% elif row.direction == 'L' %}<i class="fas fa-arrow-left dir-icon"></i> Trái
+                        {% elif row.direction == 'R' %}<i class="fas fa-arrow-right dir-icon"></i> Phải
+                        {% elif row.direction == 'S' %}<i class="fas fa-stop-circle dir-icon"></i> Dừng
+                        {% else %}{{ row.direction }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="5" class="no-data">Chưa có dữ liệu lịch sử.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</body>
+
+</html>

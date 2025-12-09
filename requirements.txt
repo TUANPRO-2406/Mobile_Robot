@@ -1,0 +1,5 @@
+Flask
+gunicorn
+paho-mqtt
+pymongo
+python-dotenv
