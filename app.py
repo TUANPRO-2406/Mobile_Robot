@@ -2,19 +2,25 @@ import paho.mqtt.client as mqtt
 from flask import Flask, render_template, jsonify, request
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
+from bson.objectid import ObjectId # Cần thiết để xử lý _id
 import json
 import datetime 
 import os
 import ssl 
 
+# ----------------------------------------------------
+# 1. Cấu hình MongoDB Atlas
+# ----------------------------------------------------
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/") 
 DB_NAME = "Mobile_Robot" 
 COLLECTION_NAME = "telemetry"
 
 try:
     if "srv" in MONGO_URI:
+        # Sử dụng ServerApi cho MongoDB Atlas (kết nối srv)
         mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
     else:
+        # Kết nối cục bộ
         mongo_client = MongoClient(MONGO_URI)
         
     db = mongo_client[DB_NAME]
@@ -25,10 +31,10 @@ try:
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
     print("WARNING: Application running without database connection.")
-    telemetry_collection = None 
+    telemetry_collection = None # Đặt None nếu kết nối thất bại
 
 # ----------------------------------------------------
-# 2. Cấu hình MQTT (Đảm bảo các biến được đọc)
+# 2. Cấu hình MQTT
 # ----------------------------------------------------
 MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud" 
 MQTT_PORT = 8883 # Cổng MQTTS (Bảo mật)
@@ -40,9 +46,8 @@ MQTT_PASSWORD = os.environ.get('MQTT_PASS', 'Tuan@24062004')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key_local') 
-
-# Khởi tạo client, sử dụng API V2 
-mqtt_client = mqtt.Client()
+ 
+mqtt_client = mqtt.Client() 
 
 current_state = {
     'speed': 0,
@@ -51,16 +56,14 @@ current_state = {
 }
 
 # ----------------------------------------------------
-# 3. Logic Kết nối MQTT (Khởi tạo NỘI BỘ Worker)
+# 3. Logic Kết nối MQTT (Worker Process)
 # ----------------------------------------------------
 
-# 🚨 ĐÃ SỬA: Chấp nhận 5 tham số để khớp với API V2
 def on_connect(client, userdata, flags, rc):
     """Callback khi kết nối thành công: Đăng ký Topic (API V2)."""
     print(f"MQTT Connected successfully with result code {rc}")
     client.subscribe(MQTT_STATUS_TOPIC) 
 
-# 🚨 ĐÃ SỬA: Chấp nhận 4 tham số để khớp với API V2
 def on_message(client, userdata, msg):
     """Callback khi nhận được dữ liệu trạng thái từ ESP (API V2)."""
     global current_state
@@ -70,13 +73,15 @@ def on_message(client, userdata, msg):
 
         if msg.topic == MQTT_STATUS_TOPIC:
             
+            # --- LƯU VÀO MONGODB ATLAS ---
             if telemetry_collection is not None:
+                # Ghi lại trạng thái nhận được và lưu vào DB
                 telemetry_record = {
                     "timestamp": datetime.datetime.now(),
                     "speed": data.get('speed', current_state['speed']),
                     "mode": data.get('mode', current_state['mode']),  
-                    "direction": current_state['last_command'],        
-                    "raw_data": data                                   
+                    "direction": current_state['last_command'],       
+                    "raw_data": data                           
                 }
                 telemetry_collection.insert_one(telemetry_record)
                 print("MongoDB <== Data inserted.")
@@ -91,7 +96,7 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"Error processing message or inserting to MongoDB: {e}")
 
-# 🚨 SỬ DỤNG HOOK CỦA FLASK: Khởi tạo MQTT trong tiến trình Worker 
+
 @app.before_request
 def setup_mqtt_worker():
     """Khởi tạo MQTT Client cho mỗi Worker Gunicorn (Chỉ chạy một lần)."""
@@ -104,10 +109,9 @@ def setup_mqtt_worker():
         if MQTT_USERNAME and MQTT_PASSWORD:
             mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
-        # Log trạng thái cấu hình MQTT (không in mật khẩu)
         print(f"MQTT config -> broker={MQTT_BROKER} port={MQTT_PORT} user_set={bool(MQTT_USERNAME)}")
         
-        # BƯỚC 2: Cấu hình TLS/SSL sử dụng system CA (an toàn hơn trên Render)
+        # BƯỚC 2: Cấu hình TLS/SSL sử dụng system CA
         try:
             tls_ctx = ssl.create_default_context()
             tls_ctx.check_hostname = True
@@ -121,7 +125,7 @@ def setup_mqtt_worker():
         
         client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
         try:
-            # 🚨 THỬ KẾT NỐI VÀ BẮT ĐẦU LUỒNG MQTT
+            # THỬ KẾT NỐI VÀ BẮT ĐẦU LUỒNG MQTT
             print(f"Attempting MQTT connect to {MQTT_BROKER}:{MQTT_PORT} ...")
             mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
             mqtt_client.loop_start()
@@ -132,14 +136,15 @@ def setup_mqtt_worker():
 
 
 # ----------------------------------------------------
-# 4. Định tuyến và MQTT Publishing (Giữ nguyên)
+# 4. Định tuyến Điều khiển (Giữ nguyên)
 # ----------------------------------------------------
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', current_state=current_state)
 
 @app.route('/command', methods=['POST'])
 def receive_command():
+    # ... (Logic POST Command)
     data = request.get_json()
     command = data.get('command', 'S')
     
@@ -147,7 +152,6 @@ def receive_command():
         'cmd': command,
         'spd': current_state['speed'],
     })
-    
     mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
     
     current_state['last_command'] = command
@@ -161,6 +165,7 @@ def receive_command():
 
 @app.route('/speed/<int:value>', methods=['POST'])
 def set_speed(value):
+    # ... (Logic Set Speed)
     global current_state
     if 0 <= value <= 255:
         current_state['speed'] = value
@@ -177,6 +182,7 @@ def set_speed(value):
 
 @app.route('/mode', methods=['POST'])
 def toggle_mode():
+    # ... (Logic Toggle Mode)
     global current_state
     if current_state['mode'] == 'MANUAL':
         current_state['mode'] = 'AUTO'
@@ -191,10 +197,55 @@ def toggle_mode():
         'mode': current_state['mode']
     }), 200
 
+# ----------------------------------------------------
+# 5. Định tuyến Trang Lịch sử và API Lịch sử (ĐÃ THÊM)
+# ----------------------------------------------------
 
+def serialize_log(log):
+    """Chuyển đổi đối tượng MongoDB (ObjectId, datetime) thành JSON an toàn."""
+    serialized_log = log.copy()
+    
+    if '_id' in serialized_log and isinstance(serialized_log['_id'], (ObjectId, str)):
+        serialized_log['_id'] = str(serialized_log['_id'])
+        
+    if 'timestamp' in serialized_log and isinstance(serialized_log['timestamp'], datetime.datetime):
+        serialized_log['timestamp'] = serialized_log['timestamp'].strftime("%Y-%m-%d %H:%M:%S")
+        
+    return serialized_log
+
+@app.route('/history', methods=['GET'])
+def history_page():
+    """Route render ra file HTML lịch sử."""
+    return render_template('history.html')
+
+@app.route('/api/history', methods=['GET'])
+def get_history_data():
+    """Route truy vấn dữ liệu từ MongoDB Atlas và trả về JSON."""
+    if telemetry_collection is None:
+        return jsonify({"error": "Database not connected"}), 503
+
+    try:
+        # Lấy 50 bản ghi mới nhất
+        limit = int(request.args.get('limit', 50))
+        
+        history_cursor = telemetry_collection.find() \
+                                             .sort("timestamp", -1) \
+                                             .limit(limit)
+        
+        # Xử lý và Chuyển đổi sang JSON
+        history_list = [serialize_log(log) for log in history_cursor]
+        
+        return jsonify(history_list)
+    except Exception as e:
+        print(f"Lỗi truy vấn MongoDB Atlas: {e}")
+        return jsonify({"error": "Lỗi máy chủ khi tải dữ liệu"}), 500
+
+# ----------------------------------------------------
+# 6. Endpoint Health Check (Giữ nguyên)
+# ----------------------------------------------------
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Simple health endpoint: checks MongoDB ping and MQTT connection status."""
+    # ... (Logic Health Check)
     db_ok = False
     try:
         mongo_client.admin.command('ping')
@@ -211,4 +262,6 @@ def health_check():
     }), 200
 
 if __name__ == '__main__':
+    # Chạy cục bộ
+    # Lưu ý: Khi chạy Gunicorn trên Render, phần này sẽ KHÔNG được gọi
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
