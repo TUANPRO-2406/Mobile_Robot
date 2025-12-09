@@ -146,8 +146,31 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 1. Cập nhật UI ban đầu từ slider (tránh null)
             sliderValueDisplay.textContent = speedSlider.value;
             currentSpeedDisplay.textContent = speedSlider.value;
+
+            // 2. Gọi API /status để đồng bộ dữ liệu chuẩn từ Server
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'OK') {
+                        // Đồng bộ Tốc độ
+                        speedSlider.value = data.speed;
+                        sliderValueDisplay.textContent = data.speed;
+                        currentSpeedDisplay.textContent = data.speed;
+
+                        // Đồng bộ Chế độ
+                        update_status_ui(data.mode);
+
+                        // Đồng bộ Gas (nếu có)
+                        if (data.gas !== undefined) {
+                            const gasDisplay = document.getElementById('current-gas-display');
+                            if (gasDisplay) gasDisplay.textContent = data.gas;
+                        }
+                    }
+                })
+                .catch(err => console.error("Lỗi đồng bộ trạng thái:", err));
         });
 
     </script>
