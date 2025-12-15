@@ -133,33 +133,43 @@ def on_message(client, userdata, msg, properties):
 
 # ... (Hàm start_mqtt và các hàm định tuyến khác không đổi) ...
 
-def start_mqtt():
-    """Khởi tạo và kết nối MQTT Client."""
+@app.before_request
+def setup_mqtt_worker():
+    """Khởi tạo MQTT Client cho mỗi Worker Gunicorn (Chỉ chạy một lần)."""
     
-    # BƯỚC 1: Cấu hình Username/Password
-    if MQTT_USERNAME and MQTT_PASSWORD:
-        mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-    
-    # BƯỚC 2: Cấu hình TLS/SSL cho cổng 8883
-    # Thiết lập TLS cho kết nối bảo mật
-    mqtt_client.tls_set(certfile=None, 
-                        keyfile=None, 
-                        cert_reqs=ssl.CERT_REQUIRED, 
-                        tls_version=ssl.PROTOCOL_TLS, 
-                        ciphers=None)
-    
-    mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = on_message
-    
-    client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
-    try:
-        # THỬ KẾT NỐI: Log lỗi nếu kết nối thất bại
-        print(f"Attempting MQTT connect to {MQTT_BROKER}:{MQTT_PORT} ...")
-        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        mqtt_client.loop_start() 
-        print(f"INFO: MQTT Client thread started.")
-    except Exception as e:
-        print(f"FATAL ERROR: Could not connect MQTT Broker at {MQTT_BROKER}:{MQTT_PORT}. Details: {e}")
+    if 'mqtt_connected_flag' not in app.config or not app.config.get('mqtt_connected_flag'):
+        
+        print("--- Setting up MQTT Worker Process ---")
+        
+        # BƯỚC 1: Cấu hình Username/Password
+        if MQTT_USERNAME and MQTT_PASSWORD:
+            mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
+        # Log trạng thái cấu hình MQTT (không in mật khẩu)
+        print(f"MQTT config -> broker={MQTT_BROKER} port={MQTT_PORT} user_set={bool(MQTT_USERNAME)}")
+        
+        # BƯỚC 2: Cấu hình TLS/SSL sử dụng system CA (an toàn hơn trên Render)
+        try:
+            tls_ctx = ssl.create_default_context()
+            tls_ctx.check_hostname = True
+            mqtt_client.tls_set_context(tls_ctx)
+            print("MQTT TLS: Using system default CA context.")
+        except Exception as e:
+            print(f"WARNING: Could not set MQTT TLS context: {e}")
+            
+        mqtt_client.on_connect = on_connect
+        mqtt_client.on_message = on_message
+        
+        client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
+        try:
+            # 🚨 THỬ KẾT NỐI VÀ BẮT ĐẦU LUỒNG MQTT
+            print(f"Attempting MQTT connect to {MQTT_BROKER}:{MQTT_PORT} ...")
+            mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+            mqtt_client.loop_start()
+            app.config['mqtt_connected_flag'] = True
+            print("INFO: MQTT Client thread started successfully within Worker.")
+        except Exception as e:
+            print(f"FATAL ERROR: Could not connect MQTT Broker. Details: {e}")
 
 # ----------------------------------------------------
 # 4. Định tuyến và MQTT Publishing (Giữ nguyên)
@@ -220,8 +230,6 @@ def toggle_mode():
         'status': 'OK', 
         'mode': current_state['mode']
     }), 200
-
-start_mqtt() 
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
