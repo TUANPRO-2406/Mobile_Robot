@@ -36,7 +36,6 @@ MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883 # Cổng MQTTS (Bảo mật)
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
-MQTT_DATA_TOPIC = "robot/telemetry/data"
 
 MQTT_USERNAME = os.environ.get('MQTT_USER', 'tuanpro')
 MQTT_PASSWORD = os.environ.get('MQTT_PASS', 'Tuan@24062004')
@@ -62,8 +61,7 @@ def on_connect(client, userdata, flags, rc):
     """Callback khi kết nối thành công: Đăng ký Topic (API V2)."""
     print(f"MQTT Connected successfully with result code {rc}")
     client.subscribe(MQTT_STATUS_TOPIC) 
-    client.subscribe(MQTT_DATA_TOPIC) 
-
+    client.subscribe(MQTT_DATA_TOPIC)
 
 # 🚨 ĐÃ SỬA: Chấp nhận 4 tham số để khớp với API V2
 def on_message(client, userdata, msg):
@@ -92,7 +90,6 @@ def on_message(client, userdata, msg):
                 current_state['speed'] = data['speed']
             if 'mode' in data:
                 current_state['mode'] = data['mode']
-                
         elif msg.topic == MQTT_DATA_TOPIC:
             # Dữ liệu Cảm biến (RPM, Gas) -> Collection 'sensor'
             
@@ -104,6 +101,7 @@ def on_message(client, userdata, msg):
                     "rpm2": data.get('rpm2'),
                     "rpm3": data.get('rpm3'),
                     "rpm4": data.get('rpm4'),
+                    "raw_data": data
                 }
                 sensor_collection.insert_one(sensor_record)
                 print("MongoDB <== Sensor DATA inserted into SENSOR.")
@@ -204,10 +202,35 @@ def toggle_mode():
     else:
         current_state['mode'] = 'MANUAL'
         
+    
     mqtt_client.publish('robot/mode/status', current_state['mode'], qos=0)
     
+    # [NEW] Log mode change to MongoDB history
+    if telemetry_collection is not None:
+        try:
+            telemetry_collection.insert_one({
+                "timestamp": datetime.datetime.now(),
+                "speed": current_state['speed'],
+                "mode": current_state['mode'],
+                "direction": current_state['last_command'],
+                "raw_data": {"event": "mode_switch_web", "note": "User toggled mode"}
+            })
+            print(f"Flask ==> MongoDB: Logged mode change to {current_state['mode']}")
+        except Exception as e:
+            print(f"Flask ==> MongoDB Error: {e}")
+
     return jsonify({
         'status': 'OK', 
+        'mode': current_state['mode']
+    }), 200
+
+
+@app.route('/status', methods=['GET'])
+def get_status():
+    global current_state
+    return jsonify({
+        'status': 'OK',
+        'speed': current_state['speed'],
         'mode': current_state['mode']
     }), 200
 
@@ -229,6 +252,63 @@ def health_check():
         'mongo': 'connected' if db_ok else 'disconnected',
         'mqtt': 'connected' if mqtt_ok else 'disconnected'
     }), 200
+
+
+@app.route('/history')
+def history_page():
+    print("[DEBUG] Accessing /history route...")
+    if telemetry_collection is None:
+        print("[WARNING] MongoDB not connected, returning empty history")
+        return render_template('history.html', history_data=[])
+    
+    try:
+        print("[DEBUG] Fetching history data from MongoDB...")
+        cursor = telemetry_collection.find().sort('timestamp', -1).limit(50)
+        
+        history_data = []
+        for record in cursor:
+            timestamp_str = record.get('timestamp', datetime.datetime.now()).strftime('%d/%m/%Y %H:%M:%S')
+            
+            # Lấy gas value từ raw_data (nếu có)
+            raw_data = record.get('raw_data', {})
+            gas_value = raw_data.get('gas', 0)  # Default 0 nếu không có
+            
+            # 🔧 DEBUG: Lấy encoder speeds từ raw_data (s1, s2, s3, s4)
+            # Arduino gửi encoder data với key s1-s4
+            encoder_s1 = raw_data.get('s1', 0)
+            encoder_s2 = raw_data.get('s2', 0)
+            encoder_s3 = raw_data.get('s3', 0)
+            encoder_s4 = raw_data.get('s4', 0)
+            
+            history_data.append({
+                'timestamp': timestamp_str,
+                'mode': record.get('mode', 'MANUAL'),
+                'speed': record.get('speed', 0),
+                'direction': record.get('direction', 'S'),
+                'gas': gas_value,
+                # ✅ CHECK: Thêm encoder data
+                's1': encoder_s1,
+                's2': encoder_s2,
+                's3': encoder_s3,
+                's4': encoder_s4
+            })
+        
+        print(f"[CHECK] Found {len(history_data)} records from MongoDB")
+        
+        # [DEBUG] In ra record đầu tiên để kiểm tra format
+        if history_data:
+            print(f"[DEBUG] First record => {history_data[0]}")
+        else:
+            print("[WARNING] No data found in telemetry collection")
+        
+        return render_template('history.html', history_data=history_data)
+        
+    except Exception as e:
+        # [WARNING] Log lỗi chi tiết để debug
+        print(f"[ERROR] in /history route: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('history.html', history_data=[])
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
