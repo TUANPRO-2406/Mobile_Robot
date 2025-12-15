@@ -36,7 +36,7 @@ MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883 # Cổng MQTTS (Bảo mật)
 MQTT_CMD_TOPIC = "robot/command/set" 
 MQTT_STATUS_TOPIC = "robot/telemetry/status" 
-
+MQTT_DATA_TOPIC = "robot/telemetry/data"
 MQTT_USERNAME = os.environ.get('MQTT_USER', 'tuanpro')
 MQTT_PASSWORD = os.environ.get('MQTT_PASS', 'Tuan@24062004')
 
@@ -303,10 +303,10 @@ def history_page():
             
             # 🔧 DEBUG: Lấy encoder speeds từ raw_data (s1, s2, s3, s4)
             # Arduino gửi encoder data với key s1-s4
-            encoder_s1 = raw_data.get('s1', 0)
-            encoder_s2 = raw_data.get('s2', 0)
-            encoder_s3 = raw_data.get('s3', 0)
-            encoder_s4 = raw_data.get('s4', 0)
+            encoder_s1 = raw_data.get('rmp1', 0)
+            encoder_s2 = raw_data.get('rmp2', 0)
+            encoder_s3 = raw_data.get('rmp3', 0)
+            encoder_s4 = raw_data.get('rmp4', 0)
             
             history_data.append({
                 'timestamp': timestamp_str,
