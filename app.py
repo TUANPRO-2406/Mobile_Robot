@@ -62,6 +62,8 @@ def on_connect(client, userdata, flags, rc):
     """Callback khi kết nối thành công: Đăng ký Topic (API V2)."""
     print(f"MQTT Connected successfully with result code {rc}")
     client.subscribe(MQTT_STATUS_TOPIC) 
+    client.subscribe(MQTT_DATA_TOPIC) 
+
 
 # 🚨 ĐÃ SỬA: Chấp nhận 4 tham số để khớp với API V2
 def on_message(client, userdata, msg):
