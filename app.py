@@ -170,6 +170,20 @@ def receive_command():
     
     current_state['last_command'] = command
     print(f"Flask ==> PUBLISHED: {command} to {MQTT_CMD_TOPIC}")
+
+    # [NEW] Log command to MongoDB history
+    if telemetry_collection is not None:
+        try:
+            telemetry_collection.insert_one({
+                "timestamp": datetime.datetime.now(),
+                "speed": current_state['speed'],
+                "mode": current_state['mode'],
+                "direction": command,
+                "raw_data": {"event": "command_web", "note": f"User sent {command}"}
+            })
+            print(f"Flask ==> MongoDB: Logged command {command}")
+        except Exception as e:
+            print(f"Flask ==> MongoDB Error: {e}")
     
     return jsonify({
         'status': 'OK', 
@@ -188,6 +202,20 @@ def set_speed(value):
             'spd': value,
         })
         mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
+
+        # [NEW] Log speed change to MongoDB history
+        if telemetry_collection is not None:
+            try:
+                telemetry_collection.insert_one({
+                    "timestamp": datetime.datetime.now(),
+                    "speed": value,
+                    "mode": current_state['mode'],
+                    "direction": current_state['last_command'],
+                    "raw_data": {"event": "speed_set_web", "note": f"User set speed to {value}"}
+                })
+                print(f"Flask ==> MongoDB: Logged speed change to {value}")
+            except Exception as e:
+                print(f"Flask ==> MongoDB Error: {e}")
         
         return jsonify({'status': 'OK', 'speed': value, 'mode': current_state['mode']}), 200
         
