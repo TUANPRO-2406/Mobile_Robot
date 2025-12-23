@@ -32,17 +32,17 @@
             <div class="status-panel">
                 <div class="status-header">
                     <p>Chế độ: <strong id="current-mode">MANUAL</strong></p>
-                    <p>Khí gas: <strong id="current-gas-display" style="color: green;">0</strong></p>
+                    <p>Khí gas: <strong id="current-gas-display" style="color: green;">Không</strong></p>
                     <p>Tốc độ: <strong id="current-speed-display">0</strong></p>
                 </div>
                 <p id="message-log"></p>
 
                 <div class="toggle-speed-group">
-                    <button id="mode-toggle-btn" class="mode-manual">Chế độ tự động</button>
+                    <button id="mode-toggle-btn" class="mode-manual">Chuyển sang Tự động</button>
                     <!-- Thanh trượt tốc độ -->
                     <div class="speed-control">
-                        <span>Tốc độ: <span id="slider-value">0</span>/255</span>
-                        <input type="range" min="0" max="255" value="0" class="slider" id="speed-slider">
+                        <span>Tốc độ: <span id="slider-value">150</span>/255</span>
+                        <input type="range" min="0" max="255" value="150" class="slider" id="speed-slider">
                     </div>
                 </div>
             </div>
@@ -54,25 +54,25 @@
             <div class="control-pad" id="manual-controls">
                 <div class="row">
                     <img src="/static/images/tuan.jpg" class="control-img" alt="Tiến"
-                        onmousedown="send_command_post('FORWARD')" ontouchstart="send_command_post('FORWARD')"
-                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                        onmousedown="send_command_post('F')" ontouchstart="send_command_post('F')"
+                        onmouseup="send_command_post('S')" ontouchend="send_command_post('S')">
                 </div>
                 <div class="row">
                     <img src="/static/images/thun.jpg" class="control-img" alt="Trái"
-                        onmousedown="send_command_post('LEFT')" ontouchstart="send_command_post('LEFT')"
-                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                        onmousedown="send_command_post('L')" ontouchstart="send_command_post('L')"
+                        onmouseup="send_command_post('S')" ontouchend="send_command_post('S')">
 
                     <img src="/static/images/beu.jpg" class="control-img stop-img" alt="Dừng"
-                        onclick="send_command_post('STOP')">
+                        onclick="send_command_post('S')">
 
                     <img src="/static/images/hin.jpg" class="control-img" alt="Phải"
-                        onmousedown="send_command_post('RIGHT')" ontouchstart="send_command_post('RIGHT')"
-                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                        onmousedown="send_command_post('R')" ontouchstart="send_command_post('R')"
+                        onmouseup="send_command_post('S')" ontouchend="send_command_post('S')">
                 </div>
                 <div class="row">
                     <img src="/static/images/dieu.jpg" class="control-img" alt="Lùi"
-                        onmousedown="send_command_post('BACKWARD')" ontouchstart="send_command_post('BACKWARD')"
-                        onmouseup="send_command_post('STOP')" ontouchend="send_command_post('STOP')">
+                        onmousedown="send_command_post('B')" ontouchstart="send_command_post('B')"
+                        onmouseup="send_command_post('S')" ontouchend="send_command_post('S')">
                 </div>
             </div>
         </div>
@@ -111,8 +111,10 @@
             }
         }
 
+        let current_mode = "MANUAL"; // Biến lưu trạng thái thực tế (MANUAL/AUTO)
+
         function send_command_post(command) {
-            if (currentModeDisplay.textContent === "MANUAL") {
+            if (current_mode === "MANUAL") {
                 post_data('/command', { command: command });
             } else {
                 messageLog.textContent = "Robot đang ở chế độ Tự động.";
@@ -131,13 +133,15 @@
         });
 
         function update_status_ui(new_mode) {
-            currentModeDisplay.textContent = new_mode;
+            current_mode = new_mode;
             if (new_mode === "MANUAL") {
+                currentModeDisplay.textContent = "Thủ công";
                 modeToggleBtn.textContent = "Chuyển sang Tự động";
                 modeToggleBtn.className = "mode-manual";
                 manualControls.style.opacity = "1";
                 manualControls.style.pointerEvents = "auto";
-            } else {
+            } else if (new_mode === "AUTO") {
+                currentModeDisplay.textContent = "Tự động";
                 modeToggleBtn.textContent = "Chuyển sang Điều khiển";
                 modeToggleBtn.className = "mode-auto";
                 manualControls.style.opacity = "0.5";
@@ -166,7 +170,15 @@
                         // Đồng bộ Gas (nếu có)
                         if (data.gas !== undefined) {
                             const gasDisplay = document.getElementById('current-gas-display');
-                            if (gasDisplay) gasDisplay.textContent = data.gas;
+                            if (gasDisplay) {
+                                if (data.gas > 400) {
+                                    gasDisplay.textContent = "Có (Rò rỉ!)";
+                                    gasDisplay.style.color = "red";
+                                } else {
+                                    gasDisplay.textContent = "Không";
+                                    gasDisplay.style.color = "green";
+                                }
+                            }
                         }
                     }
                 })
