@@ -62,37 +62,40 @@ def on_message(client, userdata, msg):
         payload = msg.payload.decode()
         data = json.loads(payload)
 
-        # 1. DATA TOPIC: Gas Only
         if msg.topic == MQTT_DATA_TOPIC:
             gas_val = data.get('gas', 0)
             current_state['gas'] = gas_val
 
-            if gas_val > 500 and sensor_collection is not None:
+            if sensor_collection is not None:
                 sensor_record = {
                     "timestamp": datetime.datetime.now(),
                     "gas_value": gas_val,
                 }
                 sensor_collection.insert_one(sensor_record)
-                print(f"ALARM: Gas leak detected ({gas_val}) -> Saved to DB 'sensor'")
+                print(f"GAS EVENT: Saved to DB 'sensor' | Value: {gas_val} | Status: {'LEAK' if gas_val > 500 else 'NORMAL'}")
 
-        # 2. STATUS TOPIC: Robot State & Avoidance
         elif msg.topic == MQTT_STATUS_TOPIC:
-            # Update Robot State
             current_state['mode'] = data.get('mode', current_state['mode'])
             current_state['speed'] = data.get('spd', current_state['speed'])
             if 'cmd' in data:
                 current_state['last_command'] = data['cmd']
 
-            # Avoidance Events
-            if 'duration' in data and telemetry_collection is not None:
+            # Avoidance Events (Keys: a_dur, a_dir)
+            if 'a_dur' in data and telemetry_collection is not None:
+                # Map direction to angle
+                d = data.get('a_dir', 'S')
+                angle = 0
+                if d == 'L' or d == 'R': angle = 90
+                elif d == 'B': angle = 180
+
                 telemetry_record = {
                     "timestamp": datetime.datetime.now(),
-                    "direct": data.get('direct'),
-                    "angle": data.get('angle'),
-                    "duration": data.get('duration'),
+                    "direct": d,
+                    "angle": angle,
+                    "duration": data.get('a_dur', 0),
                 }
                 telemetry_collection.insert_one(telemetry_record)
-                print(f"EVENT: Obstacle Avoided ({data.get('direct')}) -> Saved to DB 'telemetry'")
+                print(f"EVENT: Obstacle Avoided ({d}) -> Saved to DB 'telemetry'")
 
     except Exception as e:
         print(f"Error processing message: {e}")
@@ -235,10 +238,7 @@ def history_page():
     try:
         gas_history = []
         if sensor_collection is not None:
-            gas_filter = {}
-            gas_filter.update(query_filter)
-            
-            gas_cursor = sensor_collection.find(gas_filter).sort('timestamp', -1)
+            gas_cursor = sensor_collection.find().sort('timestamp', -1)
             if not selected_date: gas_cursor = gas_cursor.limit(50)
             
             for record in gas_cursor:
@@ -249,10 +249,7 @@ def history_page():
 
         auto_history = []
         if telemetry_collection is not None:
-            auto_filter = {}
-            auto_filter.update(query_filter)
-            
-            auto_cursor = telemetry_collection.find(auto_filter).sort('timestamp', -1)
+            auto_cursor = telemetry_collection.find().sort('timestamp', -1)
             if not selected_date: auto_cursor = auto_cursor.limit(50)
             
             for record in auto_cursor:
@@ -263,10 +260,7 @@ def history_page():
                     'duration': record.get('duration', 0),
                 })
         
-        return render_template('history.html', 
-                               gas_history=gas_history,
-auto_history=auto_history,
-                               selected_date=selected_date)
+        return render_template('history.html', gas_history=gas_history,auto_history=auto_history,selected_date=selected_date)
         
     except Exception as e:
         print(f"[ERROR] history page: {e}")
