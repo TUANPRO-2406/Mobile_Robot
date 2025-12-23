@@ -239,7 +239,11 @@
                         {% for row in gas_history %}
                         <tr>
                             <td>{{ row.timestamp }}</td>
-                            <td style="color: #dc3545; font-weight: bold;">Có rò rỉ!</td>
+                            {% if row.value == "CÓ" %}
+                            <td style="color: #dc3545; font-weight: bold;">{{ row.value }}</td>
+                            {% else %}
+                            <td style="color: #28a745; font-weight: bold;">{{ row.value }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                         {% else %}
