@@ -72,7 +72,7 @@ def on_message(client, userdata, msg):
                     "gas_value": gas_val,
                 }
                 sensor_collection.insert_one(sensor_record)
-                print(f"GAS EVENT: Saved to DB 'sensor' | Value: {gas_val} | Status: {'LEAK' if gas_val > 500 else 'NORMAL'}")
+                print(f"ALARM: Gas leak detected ({gas_val}) -> Saved to DB 'sensor'")
 
         elif msg.topic == MQTT_STATUS_TOPIC:
             current_state['mode'] = data.get('mode', current_state['mode'])
@@ -80,22 +80,16 @@ def on_message(client, userdata, msg):
             if 'cmd' in data:
                 current_state['last_command'] = data['cmd']
 
-            # Avoidance Events (Keys: a_dur, a_dir)
-            if 'a_dur' in data and telemetry_collection is not None:
-                # Map direction to angle
-                d = data.get('a_dir', 'S')
-                angle = 0
-                if d == 'L' or d == 'R': angle = 90
-                elif d == 'B': angle = 180
-
+            # Avoidance Events (Keys: direct, angle, duration)
+            if 'duration' in data and telemetry_collection is not None:
                 telemetry_record = {
                     "timestamp": datetime.datetime.now(),
-                    "direct": d,
-                    "angle": angle,
-                    "duration": data.get('a_dur', 0),
+                    "direct": data.get('direct'),
+                    "angle": data.get('angle', 0),
+                    "duration": data.get('duration'),
                 }
                 telemetry_collection.insert_one(telemetry_record)
-                print(f"EVENT: Obstacle Avoided ({d}) -> Saved to DB 'telemetry'")
+                print(f"EVENT: Obstacle Avoided ({data.get('direct')}) -> Saved to DB 'telemetry'")
 
     except Exception as e:
         print(f"Error processing message: {e}")
