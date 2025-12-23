@@ -232,7 +232,10 @@ def history_page():
     try:
         gas_history = []
         if sensor_collection is not None:
-            gas_cursor = sensor_collection.find().sort('timestamp', -1)
+            gas_filter = {}
+            gas_filter.update(query_filter)
+            
+            gas_cursor = sensor_collection.find(gas_filter).sort('timestamp', -1)
             if not selected_date: gas_cursor = gas_cursor.limit(50)
             
             for record in gas_cursor:
@@ -243,7 +246,10 @@ def history_page():
 
         auto_history = []
         if telemetry_collection is not None:
-            auto_cursor = telemetry_collection.find().sort('timestamp', -1)
+            auto_filter = {}
+            auto_filter.update(query_filter)
+            
+            auto_cursor = telemetry_collection.find(auto_filter).sort('timestamp', -1)
             if not selected_date: auto_cursor = auto_cursor.limit(50)
             
             for record in auto_cursor:
@@ -254,11 +260,11 @@ def history_page():
                     'duration': record.get('duration', 0),
                 })
         
-        return render_template('history.html', gas_history=gas_history,auto_history=auto_history,selected_date=selected_date)
+        return render_template('history.html', 
+                               gas_history=gas_history,
+auto_history=auto_history,
+                               selected_date=selected_date)
         
     except Exception as e:
         print(f"[ERROR] history page: {e}")
         return render_template('history.html', gas_history=[], auto_history=[], selected_date="")
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
