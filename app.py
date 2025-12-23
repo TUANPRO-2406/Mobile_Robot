@@ -9,6 +9,7 @@ import ssl
 
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/") 
 DB_NAME = "Mobile_Robot" 
+
 TELEMETRY_COLLECTION = "telemetry"
 SENSOR_COLLECTION = "sensor"
 
@@ -28,6 +29,7 @@ except Exception as e:
     print(f"MongoDB connection failed: {e}")
     print("WARNING: Application running without database connection.")
     telemetry_collection = None 
+    sensor_collection = None
 
 MQTT_BROKER = "6400101a95264b8e8819d8992ed8be4e.s1.eu.hivemq.cloud" 
 MQTT_PORT = 8883 
@@ -50,95 +52,73 @@ current_state = {
 }
 
 def on_connect(client, userdata, flags, rc):
-    """Callback khi kết nối thành công: Đăng ký Topic (API V2)."""
     print(f"MQTT Connected successfully with result code {rc}")
     client.subscribe(MQTT_STATUS_TOPIC) 
     client.subscribe(MQTT_DATA_TOPIC)
 
 def on_message(client, userdata, msg):
-    """Callback khi nhận được dữ liệu trạng thái từ ESP (API V2)."""
     global current_state
     try:
         payload = msg.payload.decode()
         data = json.loads(payload)
 
-        if msg.topic == MQTT_STATUS_TOPIC:
-            robot_mode = data.get('mode', current_state['mode'])
-            robot_speed = data.get('speed', current_state['speed'])
-            robot_dir = data.get('dir', current_state['last_command'])
+        # 1. DATA TOPIC: Gas Only
+        if msg.topic == MQTT_DATA_TOPIC:
             gas_val = data.get('gas', 0)
-
-            # 1. Log Telemetry chung
-            if telemetry_collection is not None:
-                telemetry_record = {
-                    "timestamp": datetime.datetime.now(),
-                    "speed": robot_speed,
-                    "mode": robot_mode,
-                    "direction": robot_dir,
-                    "gas": gas_val,
-                    "raw_data": data
-                }
-                
-                # Kiểm tra rò rỉ khí gas -> Đánh dấu bản ghi
-                if gas_val > 500:
-                    telemetry_record["event_type"] = "GAS_ALERT"
-                
-                # Kiểm tra tránh vật cản (từ Arduino gửi về)
-                if 'a_dur' in data:
-                    telemetry_record["event_type"] = "AVOIDANCE"
-                    telemetry_record["avoid_dist"] = data.get('a_dist')
-                    telemetry_record["avoid_dur"] = data.get('a_dur')
-                    telemetry_record["avoid_dir"] = data.get('a_dir')
-
-                telemetry_collection.insert_one(telemetry_record)
-
-            current_state['speed'] = robot_speed
-            current_state['mode'] = robot_mode
             current_state['gas'] = gas_val
-            
-        elif msg.topic == MQTT_DATA_TOPIC:
-            if sensor_collection is not None:
+
+            if gas_val > 600 and sensor_collection is not None:
                 sensor_record = {
                     "timestamp": datetime.datetime.now(),
-                    "gas_value": data.get('gas'),
-                    "raw_data": data
+                    "gas_value": gas_val,
                 }
                 sensor_collection.insert_one(sensor_record)
-            
+                print(f"ALARM: Gas leak detected ({gas_val}) -> Saved to DB 'sensor'")
+
+        # 2. STATUS TOPIC: Robot State & Avoidance
+        elif msg.topic == MQTT_STATUS_TOPIC:
+            # Update Robot State
+            current_state['mode'] = data.get('mode', current_state['mode'])
+            current_state['speed'] = data.get('spd', current_state['speed'])
+            if 'cmd' in data:
+                current_state['last_command'] = data['cmd']
+
+            # Avoidance Events
+            if 'duration' in data and telemetry_collection is not None:
+                telemetry_record = {
+                    "timestamp": datetime.datetime.now(),
+                    "direct": data.get('direct'),
+                    "angle": data.get('angle'),
+                    "duration": data.get('duration'),
+                }
+                telemetry_collection.insert_one(telemetry_record)
+                print(f"EVENT: Obstacle Avoided ({data.get('direct')}) -> Saved to DB 'telemetry'")
+
     except Exception as e:
         print(f"Error processing message: {e}")
 
 @app.before_request
 def setup_mqtt_worker():
-    """Khởi tạo MQTT Client cho mỗi Worker Gunicorn (Chỉ chạy một lần)."""
-    
     if 'mqtt_connected_flag' not in app.config or not app.config.get('mqtt_connected_flag'):
-        
         print("--- Setting up MQTT Worker Process ---")
-    
         if MQTT_USERNAME and MQTT_PASSWORD:
             mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
-        print(f"MQTT config -> broker={MQTT_BROKER} port={MQTT_PORT} user_set={bool(MQTT_USERNAME)}")
-        
         try:
             tls_ctx = ssl.create_default_context()
             tls_ctx.check_hostname = True
             mqtt_client.tls_set_context(tls_ctx)
-            print("MQTT TLS: Using system default CA context.")
         except Exception as e:
             print(f"WARNING: Could not set MQTT TLS context: {e}")
             
         mqtt_client.on_connect = on_connect
         mqtt_client.on_message = on_message
         
-        client_id = f'flask-robot-publisher-{datetime.datetime.now().timestamp()}'
         try:
-            print(f"Attempting MQTT connect to {MQTT_BROKER}:{MQTT_PORT} ...")
             mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
             mqtt_client.loop_start()
             app.config['mqtt_connected_flag'] = True
-            print("INFO: MQTT Client thread started successfully within Worker.")
+            print("INFO: MQTT Client thread started successfully.")
         except Exception as e:
             print(f"FATAL ERROR: Could not connect MQTT Broker. Details: {e}")
 
@@ -157,24 +137,9 @@ def receive_command():
         'spd': current_state['speed'],
         'mode': current_state['mode'] 
     })
-    
     mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
     
     current_state['last_command'] = command
-    print(f"Flask ==> PUBLISHED: {command} to {MQTT_CMD_TOPIC}")
-
-    if telemetry_collection is not None:
-        try:
-            telemetry_collection.insert_one({
-                "timestamp": datetime.datetime.now(),
-                "speed": current_state['speed'],
-                "mode": current_state['mode'],
-                "direction": command,
-                "raw_data": {"event": "command_web", "note": f"User sent {command}"}
-            })
-            print(f"Flask ==> MongoDB: Logged command {command}")
-        except Exception as e:
-            print(f"Flask ==> MongoDB Error: {e}")
     
     return jsonify({
         'status': 'OK', 
@@ -194,19 +159,6 @@ def set_speed(value):
             'mode': current_state['mode'] 
         })
         mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
-
-        if telemetry_collection is not None:
-            try:
-                telemetry_collection.insert_one({
-                    "timestamp": datetime.datetime.now(),
-                    "speed": value,
-                    "mode": current_state['mode'],
-                    "direction": current_state['last_command'],
-                    "raw_data": {"event": "speed_set_web", "note": f"User set speed to {value}"}
-                })
-                print(f"Flask ==> MongoDB: Logged speed change to {value}")
-            except Exception as e:
-                print(f"Flask ==> MongoDB Error: {e}")
         
         return jsonify({'status': 'OK', 'speed': value, 'mode': current_state['mode']}), 200
         
@@ -226,23 +178,8 @@ def toggle_mode():
         'mode': current_state['mode']
     })
     mqtt_client.publish(MQTT_CMD_TOPIC, mqtt_payload, qos=0)
-        
-    
     mqtt_client.publish('robot/mode/status', json.dumps({"mode": current_state['mode']}), qos=0)
     
-    if telemetry_collection is not None:
-        try:
-            telemetry_collection.insert_one({
-                "timestamp": datetime.datetime.now(),
-                "speed": current_state['speed'],
-                "mode": current_state['mode'],
-                "direction": current_state['last_command'],
-                "raw_data": {"event": "mode_switch_web", "note": "User toggled mode"}
-            })
-            print(f"Flask ==> MongoDB: Logged mode change to {current_state['mode']}")
-        except Exception as e:
-            print(f"Flask ==> MongoDB Error: {e}")
-
     return jsonify({
         'status': 'OK', 
         'mode': current_state['mode']
@@ -263,7 +200,6 @@ def get_status():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Simple health endpoint: checks MongoDB ping and MQTT connection status."""
     db_ok = False
     try:
         mongo_client.admin.command('ping')
@@ -282,10 +218,10 @@ def health_check():
 
 @app.route('/history')
 def history_page():
-    if telemetry_collection is None:
+    if telemetry_collection is None and sensor_collection is None:
         return render_template('history.html', gas_history=[], auto_history=[], selected_date="")
     
-    selected_date = request.args.get('date', "") # Định dạng YYYY-MM-DD
+    selected_date = request.args.get('date', "") 
     query_filter = {}
     
     if selected_date:
@@ -294,42 +230,42 @@ def history_page():
             end_date = start_date + datetime.timedelta(days=1)
             query_filter["timestamp"] = {"$gte": start_date, "$lt": end_date}
         except ValueError:
-            pass # Ngày không hợp lệ, bỏ qua lọc
+            pass 
 
     try:
-        # 1. Lọc lịch sử rò rỉ khí gas
-        gas_filter = {"event_type": "GAS_ALERT"}
-        gas_filter.update(query_filter)
-        
-        gas_cursor = telemetry_collection.find(gas_filter).sort('timestamp', -1)
-        if not selected_date: gas_cursor = gas_cursor.limit(50)
-        
         gas_history = []
-        for record in gas_cursor:
-            gas_history.append({
-                'timestamp': record.get('timestamp').strftime('%d/%m/%Y %H:%M:%S'),
-                'value': record.get('gas', 0)
-            })
+        if sensor_collection is not None:
+            gas_filter = {}
+            gas_filter.update(query_filter)
+            
+            gas_cursor = sensor_collection.find(gas_filter).sort('timestamp', -1)
+            if not selected_date: gas_cursor = gas_cursor.limit(50)
+            
+            for record in gas_cursor:
+                gas_history.append({
+                    'timestamp': record.get('timestamp').strftime('%d/%m/%Y %H:%M:%S'),
+                    'value': record.get('gas_value', 0)
+                })
 
-        # 2. Lọc lịch sử tránh vật cản
-        auto_filter = {"event_type": "AVOIDANCE"}
-        auto_filter.update(query_filter)
-        
-        auto_cursor = telemetry_collection.find(auto_filter).sort('timestamp', -1)
-        if not selected_date: auto_cursor = auto_cursor.limit(50)
-        
         auto_history = []
-        for record in auto_cursor:
-            auto_history.append({
-                'timestamp': record.get('timestamp').strftime('%d/%m/%Y %H:%M:%S'),
-                'dist': record.get('avoid_dist', 0),
-                'dir': record.get('avoid_dir', 'S'),
-                'dur': record.get('avoid_dur', 0)
-            })
+        if telemetry_collection is not None:
+            auto_filter = {}
+            auto_filter.update(query_filter)
+            
+            auto_cursor = telemetry_collection.find(auto_filter).sort('timestamp', -1)
+            if not selected_date: auto_cursor = auto_cursor.limit(50)
+            
+            for record in auto_cursor:
+                auto_history.append({
+                    'timestamp': record.get('timestamp').strftime('%d/%m/%Y %H:%M:%S'),
+                    'direct': record.get('direct', 'S'),
+                    'angle': record.get('angle', 0),
+                    'duration': record.get('duration', 0),
+                })
         
         return render_template('history.html', 
-                               gas_history=gas_history, 
-                               auto_history=auto_history,
+                               gas_history=gas_history,
+auto_history=auto_history,
                                selected_date=selected_date)
         
     except Exception as e:

@@ -17,228 +17,147 @@
 
         .container {
             max-width: 1200px;
-            /* Tăng chiều rộng để vừa 2 bảng */
             margin: 0 auto;
             background: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
             padding-bottom: 15px;
         }
 
         h2 {
             margin: 0;
-            color: #2c3e50;
-            font-size: 1.5rem;
+            color: #333;
         }
 
         .btn-back {
             display: inline-block;
             padding: 10px 20px;
-            background-color: #34495e;
+            background-color: #343a40;
             color: white;
             text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-            transition: all 0.3s;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background 0.3s;
         }
 
         .btn-back:hover {
-            background-color: #2c3e50;
-            transform: translateY(-2px);
+            background-color: #23272b;
         }
 
-        /* Layout 2 bảng cạnh nhau */
-        .history-grid {
+        /* Split View Layout */
+        .split-container {
             display: flex;
-            gap: 30px;
-            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 20px;
         }
 
-        .history-section {
+        .split-col {
             flex: 1;
-            min-width: 0;
-            /* Ngăn bảng phá vỡ layout */
+            min-width: 350px;
+            background: #fff;
+            padding: 10px;
         }
 
         .section-title {
-            margin-top: 10px;
+            font-size: 1.25rem;
+            font-weight: bold;
             margin-bottom: 15px;
             padding-left: 10px;
-            border-left: 5px solid #007bff;
-            color: #333;
-            font-weight: 700;
+            border-left: 5px solid;
+            text-transform: uppercase;
         }
 
-        .section-title.gas {
+        .title-gas {
             border-left-color: #dc3545;
+            color: #dc3545;
         }
 
-        .section-title.auto {
+        .title-auto {
             border-left-color: #28a745;
+            color: #28a745;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            font-size: 0.95rem;
         }
 
         th,
         td {
             text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #edf2f7;
-            font-size: 0.9rem;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
         }
 
         th {
-            background-color: #f7fafc;
-            color: #4a5568;
-            font-weight: 600;
+            background-color: #f8f9fa;
+            color: #666;
+            font-weight: 500;
             text-transform: uppercase;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
         }
 
         tr:hover {
-            background-color: #f8f9fa;
+            background-color: #f9f9f9;
         }
 
         .no-data {
             text-align: center;
-            padding: 30px;
-            color: #a0aec0;
+            color: #999;
             font-style: italic;
+            padding: 15px;
         }
 
-        .alert-badge {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
+        .gas-danger {
+            color: #dc3545;
             font-weight: bold;
-        }
-
-        .badge-dist {
-            background: #e0e7ff;
-            color: #4338ca;
-        }
-
-        .badge-dur {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .dir-text {
-            font-weight: bold;
-            color: #2d3748;
-        }
-
-        /* Filter Bar */
-        .filter-bar {
-            background: #fff;
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        input[type="date"] {
-            padding: 8px 12px;
-            border: 1px solid #cbd5e0;
-            border-radius: 6px;
-            font-family: inherit;
-            color: #4a5568;
-        }
-
-        .btn-filter {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-
-        .btn-filter:hover {
-            background-color: #0056b3;
-        }
-
-        .btn-clear {
-            background-color: #edf2f7;
-            color: #4a5568;
-            border: 1px solid #cbd5e0;
-            padding: 8px 15px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-
-        .btn-clear:hover {
-            background-color: #e2e8f0;
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 900px) {
-            .history-grid {
-                flex-direction: column;
-            }
-
-            .filter-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
         }
     </style>
 </head>
 
 <body>
     <div class="container">
+        <!-- Header -->
         <div class="header">
-            <h2>Hệ Thống Giám Sát Robot</h2>
+            <h3>Hệ Thống Giám Sát Robot</h3>
             <a href="/" class="btn-back">Quay lại</a>
         </div>
 
-        <!-- BỘ LỌC NGÀY -->
-        <form class="filter-bar" method="GET" action="/history">
-            <div class="filter-group">
-                <label for="date-select"><i class="fa-solid fa-calendar-days"></i> Lọc theo ngày:</label>
-                <input type="date" id="date-select" name="date" value="{{ selected_date }}">
-            </div>
-            <button type="submit" class="btn-filter">Lọc dữ liệu</button>
-            {% if selected_date %}
-            <a href="/history" class="btn-clear">Xóa lọc</a>
-            {% endif %}
+        <!-- Filter (Giữ nguyên logic cũ nếu cần, hoặc ẩn hiển giản lược) -->
+        <form style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            <label><i class="far fa-calendar-alt"></i> Lọc theo ngày:</label>
+            <input type="date" name="date" value="{{ selected_date }}"
+                style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+            <button type="submit"
+                style="padding: 5px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Lọc
+                dữ liệu</button>
         </form>
 
-        <div class="history-grid">
-            <!-- BẢNG 1: RÒ RỈ KHÍ GAS -->
-            <div class="history-section">
-                <h3 class="section-title gas">Rò rỉ Khí Gas</h3>
+        <div class="split-container">
+            <!-- Cột Trái: Rò rỉ khí Gas -->
+            <div class="split-col">
+                <div class="section-title title-gas">
+                    | Rò rỉ Khí Gas
+                </div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Thời gian</th>
-                            <th>Trạng thái</th>
+                            <th>THỜI GIAN</th>
+                            <th>TRẠNG THÁI</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -246,28 +165,36 @@
                         {% for row in gas_history %}
                         <tr>
                             <td>{{ row.timestamp }}</td>
-                            <td style="color: #dc3545; font-weight: bold;">Có rò rỉ!</td>
+                            <td>
+                                {% if row.value > 600 %}
+                                <span class="gas-danger">Có rò rỉ!</span>
+                                {% else %}
+                                <span style="color: green;">Bình thường</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                         {% else %}
                         <tr>
-                            <td colspan="2" class="no-data">Không có rò rỉ.</td>
+                            <td colspan="2" class="no-data">Chưa có dữ liệu rò rỉ.</td>
                         </tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
 
-            <!-- BẢNG 2: TỰ TRÁNH VẬT CẢN -->
-            <div class="history-section">
-                <h3 class="section-title auto">Tránh vật cản (Tự hành)</h3>
+            <!-- Cột Phải: Tránh vật cản -->
+            <div class="split-col">
+                <div class="section-title title-auto">
+                    | Tránh vật cản (Tự hành)
+                </div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Thời gian</th>
-                            <th>Khoảng cách</th>
-                            <th>Hướng</th>
-                            <th>Thời gian (ms)</th>
+                            <th>THỜI GIAN</th>
+                            <th>HƯỚNG RẼ</th>
+                            <th>GÓC RẼ</th>
+                            <th>THỜI GIAN (MS)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -275,14 +202,15 @@
                         {% for row in auto_history %}
                         <tr>
                             <td>{{ row.timestamp }}</td>
-                            <td><span class="alert-badge badge-dist">{{ row.dist }}cm</span></td>
-                            <td class="dir-text">
-                                {% if row.dir == 'L' %}Trái
-                                {% elif row.dir == 'R' %}Phải
-                                {% else %}{{ row.dir }}
+                            <td>
+                                {% if row.direct == 'L' %}Trái
+                                {% elif row.direct == 'R' %}Phải
+                                {% elif row.direct == 'B' %}Lùi
+                                {% else %}{{ row.direct }}
                                 {% endif %}
                             </td>
-                            <td><span class="alert-badge badge-dur">{{ row.dur }}ms</span></td>
+                            <td>{{ row.angle }}&deg;</td>
+                            <td>{{ row.duration }}</td>
                         </tr>
                         {% endfor %}
                         {% else %}
