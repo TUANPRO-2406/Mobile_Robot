@@ -67,7 +67,7 @@ def on_message(client, userdata, msg):
             gas_val = data.get('gas', 0)
             current_state['gas'] = gas_val
 
-            if gas_val > 600 and sensor_collection is not None:
+            if gas_val > 500 and sensor_collection is not None:
                 sensor_record = {
                     "timestamp": datetime.datetime.now(),
                     "gas_value": gas_val,
@@ -244,7 +244,7 @@ def history_page():
             for record in gas_cursor:
                 gas_history.append({
                     'timestamp': record.get('timestamp').strftime('%d/%m/%Y %H:%M:%S'),
-                    'value': record.get('gas_value', 0)
+                    'value': "CÓ" if record.get('gas_value', 0)  >500 else "KHÔNG"
                 })
 
         auto_history = []
